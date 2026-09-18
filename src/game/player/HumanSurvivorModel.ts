@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
-export const CHARACTER_MODEL_FORWARD_OFFSET = 0;
+export const CHARACTER_MODEL_FORWARD_OFFSET = Math.PI;
 
 export class HumanSurvivorModel {
   public playerRoot = new THREE.Group();
