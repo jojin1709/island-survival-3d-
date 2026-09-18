@@ -9,11 +9,14 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.8-blue?style=for-the-badge&logo=typescript)](https://www.typescriptlang.org/)
 [![Rapier3D](https://img.shields.io/badge/Rapier3D-Physics-orange?style=for-the-badge&logo=webassembly)](https://rapier.rs/)
 [![Vite](https://img.shields.io/badge/Vite-7.3-646CFF?style=for-the-badge&logo=vite)](https://vitejs.dev/)
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-Vercel-000000?style=for-the-badge&logo=vercel)](https://island-survival-3d.vercel.app/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
 
 ### A realistic, third-person 3D tropical survival game built natively for the web.
 
 Explore a procedurally generated tropical island, gather resources, craft survival tools, build shelters, swim through dynamic ocean waves, and endure the elements.
+
+🎮 **[Play Live Demo on Vercel → https://island-survival-3d.vercel.app/](https://island-survival-3d.vercel.app/)**
 
 **Developed with ❤️ by [JOJIN JOHN](https://github.com/jojin1709)**
 
