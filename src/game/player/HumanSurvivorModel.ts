@@ -12,8 +12,9 @@ export class HumanSurvivorModel {
   public animations = new Map<string, THREE.AnimationAction>();
   public isLoaded = false;
 
-  // Skeletal references
+  // Skeletal references & bind pose quaternions
   public bones: Record<string, THREE.Bone> = {};
+  public targetBindQuats: Record<string, THREE.Quaternion> = {};
   public gltfScene?: THREE.Group;
 
   constructor() {
@@ -31,7 +32,7 @@ export class HumanSurvivorModel {
   }
 
   public async load(): Promise<void> {
-    console.log('[HumanSurvivorModel] Loading human survivor GLB & animation suite...');
+    console.log('[HumanSurvivorModel] Loading human survivor GLB & relative retargeting suite...');
     const loader = new GLTFLoader();
 
     try {
@@ -39,7 +40,7 @@ export class HumanSurvivorModel {
       const survivorGltf = await loader.loadAsync('/assets/characters/human_survivor.glb');
       this.gltfScene = survivorGltf.scene;
 
-      // Enable shadows and map all bones
+      // Enable shadows and capture native bind pose quaternions
       this.gltfScene.traverse((obj) => {
         if ((obj as THREE.Mesh).isMesh) {
           obj.castShadow = true;
@@ -55,6 +56,7 @@ export class HumanSurvivorModel {
         if ((obj as THREE.Bone).isBone) {
           const bone = obj as THREE.Bone;
           this.bones[bone.name] = bone;
+          this.targetBindQuats[bone.name] = bone.quaternion.clone();
         }
       });
 
@@ -69,14 +71,20 @@ export class HumanSurvivorModel {
       // 2. Initialize AnimationMixer on GLB scene
       this.mixer = new THREE.AnimationMixer(this.gltfScene);
 
-      // 3. Load Mocap Animation Clips from GLB source
+      // 3. Load Mocap Animation Clips and capture source bind pose quaternions
       const animGltf = await loader.loadAsync('/assets/characters/Soldier.glb');
       const animClips = animGltf.animations;
 
-      // Correction quaternion to compensate for Mixamo Z-up to glTF Y-up (+90 deg X on Hips)
-      const hipsCorrection = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
+      const sourceBindQuats: Record<string, THREE.Quaternion> = {};
+      animGltf.scene.traverse((obj) => {
+        if ((obj as THREE.Bone).isBone) {
+          const b = obj as THREE.Bone;
+          const cleanName = b.name.replace(/^mixamorig:/i, '').replace(/^mixamorig/i, '');
+          sourceBindQuats[cleanName] = b.quaternion.clone();
+        }
+      });
 
-      // Retarget mocap tracks: apply rotational quaternions with Hips orientation fix
+      // Relative Quaternion Retargeting
       const retargetClip = (sourceClip: THREE.AnimationClip, newName: string): THREE.AnimationClip => {
         const tracks: THREE.KeyframeTrack[] = [];
         for (const track of sourceClip.tracks) {
@@ -89,24 +97,31 @@ export class HumanSurvivorModel {
           const boneName = parts[0];
           const property = parts[1];
 
-          // 1. Ignore scale and translation tracks (prevents skinning explosion and ground bouncing)
+          // Ignore scale and translation tracks
           if (property === 'scale' || property === 'position') continue;
 
-          // 2. Map quaternion rotation tracks to survivor bones
+          // Retarget quaternion rotations relative to each bone's bind pose
           if (property === 'quaternion' && this.bones[boneName]) {
-            const rotValues = [...track.values];
+            const sourceRest = sourceBindQuats[boneName] || new THREE.Quaternion(0, 0, 0, 1);
+            const targetRest = this.targetBindQuats[boneName] || new THREE.Quaternion(0, 0, 0, 1);
+            const invSourceRest = sourceRest.clone().invert();
 
-            // If this is the Hips bone, apply the -90 deg X upright correction
-            if (boneName.toLowerCase() === 'hips') {
-              const q = new THREE.Quaternion();
-              for (let i = 0; i < rotValues.length; i += 4) {
-                q.set(rotValues[i], rotValues[i + 1], rotValues[i + 2], rotValues[i + 3]);
-                q.premultiply(hipsCorrection);
-                rotValues[i] = q.x;
-                rotValues[i + 1] = q.y;
-                rotValues[i + 2] = q.z;
-                rotValues[i + 3] = q.w;
-              }
+            const rotValues = [...track.values];
+            const keyQ = new THREE.Quaternion();
+
+            for (let i = 0; i < rotValues.length; i += 4) {
+              keyQ.set(rotValues[i], rotValues[i + 1], rotValues[i + 2], rotValues[i + 3]);
+              
+              // Delta rotation in source local bone space
+              const deltaQ = keyQ.clone().multiply(invSourceRest);
+
+              // Apply delta rotation to target bone bind pose
+              const targetQ = deltaQ.multiply(targetRest).normalize();
+
+              rotValues[i] = targetQ.x;
+              rotValues[i + 1] = targetQ.y;
+              rotValues[i + 2] = targetQ.z;
+              rotValues[i + 3] = targetQ.w;
             }
 
             const rotTrack = new THREE.QuaternionKeyframeTrack(`${boneName}.quaternion`, track.times, rotValues);
@@ -143,7 +158,7 @@ export class HumanSurvivorModel {
       this.animations.set('fall', actionRun);
 
       this.isLoaded = true;
-      console.log('[HumanSurvivorModel] Rigged human survivor standing upright with mocap animations loaded cleanly!');
+      console.log('[HumanSurvivorModel] Relative quaternion retargeting completed with clean pelvis & legs!');
     } catch (err) {
       console.error('[HumanSurvivorModel] Failed to load human model:', err);
     }
