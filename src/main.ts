@@ -23,6 +23,9 @@ import { SaveManager } from './game/save/SaveManager';
 import { UIManager } from './game/ui/UIManager';
 import { getZoneAtPosition } from './game/world/IslandZones';
 import { ITEM_REGISTRY } from './game/inventory/ItemRegistry';
+import { ToolVisualManager } from './game/player/ToolVisualManager';
+import { ParticleFX } from './game/environment/ParticleFX';
+import { WildlifeManager } from './game/environment/WildlifeManager';
 
 // Setup HTML DOM Root
 const app = document.querySelector<HTMLDivElement>('#app')!;
@@ -89,6 +92,10 @@ app.innerHTML = `
         <span class="meter-icon">⚡</span>
         <div class="meter-track"><div class="meter-fill stamina" id="staminaFill"></div></div>
       </div>
+      <div class="meter-row" id="oxygenRow" style="display: none;">
+        <span class="meter-icon">🫁</span>
+        <div class="meter-track"><div class="meter-fill oxygen" id="oxygenFill"></div></div>
+      </div>
     </div>
 
     <!-- Bottom Center Hotbar -->
@@ -149,7 +156,7 @@ app.innerHTML = `
         <div><kbd>Shift</kbd> Sprint / Fast Swim</div>
         <div><kbd>Space</kbd> Jump / Swim Up</div>
         <div><kbd>X</kbd> Dive Down (Water)</div>
-        <div><kbd>E</kbd> Gather / Mine / Drink</div>
+        <div><kbd>E</kbd> / <code>Click</code> Gather / Mine / Strike</div>
         <div><kbd>1</kbd>-<kbd>6</kbd> Hotbar Select</div>
         <div><kbd>I</kbd> Inventory</div>
         <div><kbd>C</kbd> Crafting Menu</div>
@@ -192,13 +199,16 @@ const rocks = new RockManager();
 const props = new PropManager();
 const humanModel = new HumanSurvivorModel();
 const controller = new CharacterController(humanModel);
+const toolVisual = new ToolVisualManager(humanModel);
+const particleFX = new ParticleFX();
+const wildlife = new WildlifeManager();
 const tpCamera = new ThirdPersonCamera(camera);
 const survival = new SurvivalStats();
 const inventory = new InventoryManager();
 const crafting = new CraftingManager();
 const buildings = new BuildingManager();
 const placer = new BuildingPlacer(buildings);
-const interaction = new InteractionManager(vegetation, rocks, props);
+const interaction = new InteractionManager(vegetation, rocks, props, buildings);
 const dayNight = new DayNightCycle();
 const weather = new WeatherManager();
 const audio = new SynthesizedAudio();
@@ -231,9 +241,12 @@ async function bootstrap() {
   rocks.create(scene);
   props.create(scene);
   buildings.create(scene);
+  wildlife.create(scene);
+  particleFX.init(scene);
 
   // 5. Load Rigged Human Survivor Model & Physics
   await humanModel.load();
+  toolVisual.init();
 
   // Load saved state if exists
   const savedState = SaveManager.loadGame();
@@ -246,6 +259,7 @@ async function bootstrap() {
     survival.hunger = savedState.survival.hunger ?? 100;
     survival.thirst = savedState.survival.thirst ?? 100;
     survival.stamina = savedState.survival.stamina ?? 100;
+    survival.oxygen = 100;
     inventory.slots = savedState.inventory.slots || inventory.slots;
     inventory.selectedHotbarIndex = savedState.inventory.selectedHotbarIndex || 0;
     dayNight.setTime(savedState.time.timeOfDay ?? 0.3, savedState.time.day ?? 1);
@@ -259,6 +273,7 @@ async function bootstrap() {
   }
 
   controller.init(scene, spawnPos);
+  toolVisual.updateEquippedTool(inventory);
   
   // Update camera initial position anchored on player's CameraTarget
   const targetPos = new THREE.Vector3();
@@ -319,14 +334,39 @@ function setupInputListeners(): void {
   });
 
   document.addEventListener('mousedown', (e) => {
-    if (e.button === 0 && placer.isPlacing && isPointerLocked) {
-      const placed = placer.confirmPlacement(scene, inventory);
-      if (placed) {
-        ui.toastUI.show('Structure placed successfully!');
-        ui.buildingUI.hide();
-        audio.playMine();
+    if (!isPointerLocked) return;
+
+    if (e.button === 0) {
+      if (placer.isPlacing) {
+        const placed = placer.confirmPlacement(scene, inventory);
+        if (placed) {
+          ui.toastUI.show('Structure placed successfully!');
+          ui.buildingUI.hide();
+          audio.playMine();
+        } else {
+          ui.toastUI.show('Cannot place structure here.');
+        }
       } else {
-        ui.toastUI.show('Cannot place structure here.');
+        // Attack / Harvest Swing
+        toolVisual.triggerSwing();
+
+        // Perform interaction if looking directly at a resource
+        if (interaction.currentTarget) {
+          const res = interaction.interact(inventory, survival);
+          if (res.success && res.message) {
+            ui.toastUI.show(res.message);
+            if (res.hitPosition) {
+              particleFX.spawnImpact(
+                res.hitPosition,
+                res.soundEffect === 'chop' ? 'wood' : res.soundEffect === 'mine' ? 'stone' : 'water'
+              );
+            }
+            if (res.soundEffect === 'chop') audio.playChop();
+            else if (res.soundEffect === 'mine') audio.playMine();
+            else if (res.soundEffect === 'gather') audio.playFootstep('grass');
+            else if (res.soundEffect === 'water') audio.playFootstep('water');
+          }
+        }
       }
     }
   });
@@ -354,15 +394,23 @@ function setupInputListeners(): void {
       const num = parseInt(e.code.replace('Digit', ''), 10);
       if (num >= 1 && num <= 6) {
         inventory.selectedHotbarIndex = num - 1;
+        toolVisual.updateEquippedTool(inventory);
         audio.playUIClick();
       }
     }
 
     // Interaction Key E
     if (e.code === 'KeyE') {
+      toolVisual.triggerSwing();
       const res = interaction.interact(inventory, survival);
       if (res.success && res.message) {
         ui.toastUI.show(res.message);
+        if (res.hitPosition) {
+          particleFX.spawnImpact(
+            res.hitPosition,
+            res.soundEffect === 'chop' ? 'wood' : res.soundEffect === 'mine' ? 'stone' : 'water'
+          );
+        }
         if (res.soundEffect === 'chop') audio.playChop();
         else if (res.soundEffect === 'mine') audio.playMine();
         else if (res.soundEffect === 'gather') audio.playFootstep('grass');
@@ -468,7 +516,15 @@ function animate(): void {
 
     // 5. Update Sky & Lighting centered around player
     const skyLighting = sky.update(dayNight.timeOfDay, weather.weatherIntensity, dt, controller.position);
-    scene.fog!.color.copy(skyLighting.fogColor);
+
+    // Check underwater camera fog
+    if (camera.position.y < -0.1) {
+      scene.fog!.color.set(0x0a3854);
+      (scene.fog as THREE.FogExp2).density = 0.04;
+    } else {
+      scene.fog!.color.copy(skyLighting.fogColor);
+      (scene.fog as THREE.FogExp2).density = 0.006;
+    }
 
     // 6. Update Terrain & Water Shaders
     terrain.update(
@@ -486,8 +542,8 @@ function animate(): void {
       skyLighting.daylight
     );
 
-    // 7. Update Survival Stats
-    survival.update(dt, controller.isSprinting, moveResult.staminaUsed);
+    // 7. Update Survival Stats & Diving
+    survival.update(dt, controller.isSprinting, moveResult.staminaUsed, moveResult.waterState === 'DIVING');
 
     if (survival.health <= 0) {
       ui.toastUI.show('You collapsed from exhaustion! Waking at the beach...');
@@ -497,8 +553,11 @@ function animate(): void {
       controller.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
     }
 
-    // 8. Update Interaction Target
-    interaction.update(controller.position);
+    // 8. Update Tools, Wildlife, Particles, and Interaction Target
+    toolVisual.update(dt, elapsedTime);
+    wildlife.update(dt, controller.position, elapsedTime);
+    particleFX.update(dt);
+    interaction.update(controller.position, camera);
 
     // 9. Update Building Ghost Placement
     if (placer.isPlacing) {

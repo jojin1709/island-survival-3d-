@@ -11,6 +11,8 @@ export class HUD {
   private hungerFill!: HTMLElement;
   private thirstFill!: HTMLElement;
   private staminaFill!: HTMLElement;
+  private oxygenFill!: HTMLElement;
+  private oxygenRow!: HTMLElement;
   private hotbarContainer!: HTMLElement;
   private clockEl!: HTMLElement;
   private dayEl!: HTMLElement;
@@ -25,6 +27,8 @@ export class HUD {
     this.hungerFill = document.querySelector('#hungerFill')!;
     this.thirstFill = document.querySelector('#thirstFill')!;
     this.staminaFill = document.querySelector('#staminaFill')!;
+    this.oxygenFill = document.querySelector('#oxygenFill')!;
+    this.oxygenRow = document.querySelector('#oxygenRow')!;
     this.hotbarContainer = document.querySelector('#hotbar')!;
     this.clockEl = document.querySelector('#hudClock')!;
     this.dayEl = document.querySelector('#hudDay')!;
@@ -49,6 +53,14 @@ export class HUD {
     if (this.hungerFill) this.hungerFill.style.width = `${(survival.hunger / survival.maxHunger) * 100}%`;
     if (this.thirstFill) this.thirstFill.style.width = `${(survival.thirst / survival.maxThirst) * 100}%`;
     if (this.staminaFill) this.staminaFill.style.width = `${(survival.stamina / survival.maxStamina) * 100}%`;
+    if (this.oxygenRow && this.oxygenFill) {
+      if (survival.oxygen < 99) {
+        this.oxygenRow.style.display = 'flex';
+        this.oxygenFill.style.width = `${(survival.oxygen / survival.maxOxygen) * 100}%`;
+      } else {
+        this.oxygenRow.style.display = 'none';
+      }
+    }
 
     // 2. Hotbar Slots (Bottom-Center)
     if (this.hotbarContainer) {

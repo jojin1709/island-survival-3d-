@@ -1,11 +1,6 @@
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
-/**
- * Model-specific forward axis offset.
- * In standard Three.js coordinate system, Math.atan2(mx, mz) produces an angle where 0 is +Z.
- * Our human model is constructed with its front face pointing towards +Z,
- * so the forward offset is 0.
- */
 export const CHARACTER_MODEL_FORWARD_OFFSET = 0;
 
 export class HumanSurvivorModel {
@@ -19,8 +14,8 @@ export class HumanSurvivorModel {
 
   // Skeletal references
   public bones: Record<string, THREE.Bone> = {};
-  public skeleton!: THREE.Skeleton;
-  public skinnedMesh!: THREE.SkinnedMesh;
+  public skeleton?: THREE.Skeleton;
+  public gltfScene?: THREE.Group;
 
   constructor() {
     this.playerRoot.name = 'PlayerRoot';
@@ -37,316 +32,157 @@ export class HumanSurvivorModel {
   }
 
   public async load(): Promise<void> {
-    console.log('[HumanSurvivorModel] Building realistic rigged human survivor...');
-    this.createRiggedHumanSurvivor();
-    this.createHumanSkeletalAnimations();
-    this.isLoaded = true;
-    console.log('[HumanSurvivorModel] Rigged human survivor and animation clips created successfully!');
+    console.log('[HumanSurvivorModel] Loading rigged human survivor GLB asset...');
+    const loader = new GLTFLoader();
+
+    try {
+      const gltf = await loader.loadAsync('/assets/characters/human_survivor.glb');
+      this.gltfScene = gltf.scene;
+
+      // Enable shadows and gather bones
+      this.gltfScene.traverse((obj) => {
+        if ((obj as THREE.Mesh).isMesh) {
+          obj.castShadow = true;
+          obj.receiveShadow = true;
+          const mesh = obj as THREE.Mesh;
+          if (mesh.material) {
+            if (Array.isArray(mesh.material)) {
+              mesh.material.forEach((m) => {
+                if ('roughness' in m) (m as THREE.MeshStandardMaterial).roughness = Math.max(0.3, (m as THREE.MeshStandardMaterial).roughness);
+              });
+            } else if ('roughness' in mesh.material) {
+              (mesh.material as THREE.MeshStandardMaterial).roughness = Math.max(0.3, (mesh.material as THREE.MeshStandardMaterial).roughness);
+            }
+          }
+        }
+        if ((obj as THREE.Bone).isBone) {
+          const bone = obj as THREE.Bone;
+          this.bones[bone.name] = bone;
+        }
+      });
+
+      // Scale model to natural human proportions (~1.75m tall)
+      this.gltfScene.scale.set(1.0, 1.0, 1.0);
+      this.gltfScene.position.set(0, 0, 0);
+      this.characterVisual.add(this.gltfScene);
+
+      // Attach survival backpack
+      this.attachSurvivalBackpack();
+
+      // Initialize AnimationMixer on GLB scene
+      this.mixer = new THREE.AnimationMixer(this.gltfScene);
+      this.createSkeletalAnimations();
+
+      this.isLoaded = true;
+      console.log('[HumanSurvivorModel] Human survivor GLB loaded and rigged successfully!');
+    } catch (err) {
+      console.error('[HumanSurvivorModel] Failed to load human_survivor.glb:', err);
+    }
   }
 
-  private createRiggedHumanSurvivor(): void {
-    const survivorGroup = new THREE.Group();
+  private attachSurvivalBackpack(): void {
+    const spineBone = this.bones['Spine2'] || this.bones['Spine1'] || this.bones['Spine'] || this.bones['Chest'];
+    if (!spineBone) return;
 
-    // 1. Build Humanoid Bone Hierarchy
-    const rootBone = new THREE.Bone(); rootBone.name = 'Root'; rootBone.position.set(0, 0, 0);
-    const hips = new THREE.Bone(); hips.name = 'Hips'; hips.position.set(0, 0.95, 0);
-    const spine = new THREE.Bone(); spine.name = 'Spine'; spine.position.set(0, 0.22, 0);
-    const chest = new THREE.Bone(); chest.name = 'Chest'; chest.position.set(0, 0.25, 0);
-    const neck = new THREE.Bone(); neck.name = 'Neck'; neck.position.set(0, 0.18, 0);
-    const head = new THREE.Bone(); head.name = 'Head'; head.position.set(0, 0.16, 0);
-
-    // Arms
-    const lClavicle = new THREE.Bone(); lClavicle.name = 'LeftShoulder'; lClavicle.position.set(0.18, 0.08, 0);
-    const lUpperArm = new THREE.Bone(); lUpperArm.name = 'LeftArm'; lUpperArm.position.set(0.16, -0.04, 0);
-    const lForeArm = new THREE.Bone(); lForeArm.name = 'LeftForeArm'; lForeArm.position.set(0, -0.28, 0);
-    const lHand = new THREE.Bone(); lHand.name = 'LeftHand'; lHand.position.set(0, -0.25, 0);
-
-    const rClavicle = new THREE.Bone(); rClavicle.name = 'RightShoulder'; rClavicle.position.set(-0.18, 0.08, 0);
-    const rUpperArm = new THREE.Bone(); rUpperArm.name = 'RightArm'; rUpperArm.position.set(-0.16, -0.04, 0);
-    const rForeArm = new THREE.Bone(); rForeArm.name = 'RightForeArm'; rForeArm.position.set(0, -0.28, 0);
-    const rHand = new THREE.Bone(); rHand.name = 'RightHand'; rHand.position.set(0, -0.25, 0);
-
-    // Legs
-    const lThigh = new THREE.Bone(); lThigh.name = 'LeftUpLeg'; lThigh.position.set(0.12, -0.06, 0);
-    const lShin = new THREE.Bone(); lShin.name = 'LeftLeg'; lShin.position.set(0, -0.42, 0);
-    const lFoot = new THREE.Bone(); lFoot.name = 'LeftFoot'; lFoot.position.set(0, -0.42, 0.06);
-
-    const rThigh = new THREE.Bone(); rThigh.name = 'RightUpLeg'; rThigh.position.set(-0.12, -0.06, 0);
-    const rShin = new THREE.Bone(); rShin.name = 'RightLeg'; rShin.position.set(0, -0.42, 0);
-    const rFoot = new THREE.Bone(); rFoot.name = 'RightFoot'; rFoot.position.set(0, -0.42, 0.06);
-
-    // Hierarchy Assembly
-    rootBone.add(hips);
-    hips.add(spine);
-    hips.add(lThigh);
-    hips.add(rThigh);
-    lThigh.add(lShin);
-    lShin.add(lFoot);
-    rThigh.add(rShin);
-    rShin.add(rFoot);
-
-    spine.add(chest);
-    chest.add(neck);
-    chest.add(lClavicle);
-    chest.add(rClavicle);
-    neck.add(head);
-
-    lClavicle.add(lUpperArm);
-    lUpperArm.add(lForeArm);
-    lForeArm.add(lHand);
-
-    rClavicle.add(rUpperArm);
-    rUpperArm.add(rForeArm);
-    rForeArm.add(rHand);
-
-    const bonesList = [
-      rootBone, hips, spine, chest, neck, head,
-      lClavicle, lUpperArm, lForeArm, lHand,
-      rClavicle, rUpperArm, rForeArm, rHand,
-      lThigh, lShin, lFoot,
-      rThigh, rShin, rFoot
-    ];
-
-    bonesList.forEach((b, idx) => {
-      this.bones[b.name] = b;
-      b.userData.boneIndex = idx;
-    });
-
-    this.skeleton = new THREE.Skeleton(bonesList);
-    survivorGroup.add(rootBone);
-
-    // 2. High Quality Realistic Human Survivor Mesh & PBR Materials
-    const skinMat = new THREE.MeshStandardMaterial({
-      color: 0xdca882, // Natural warm human skin tone
-      roughness: 0.62,
-      metalness: 0.0
-    });
-
-    const shirtMat = new THREE.MeshStandardMaterial({
-      color: 0x486b52, // Tropical olive green adventure t-shirt
-      roughness: 0.85,
-      metalness: 0.02
-    });
-
-    const shortsMat = new THREE.MeshStandardMaterial({
-      color: 0x6e5c46, // Weathered khaki cargo survival shorts
-      roughness: 0.88,
-      metalness: 0.0
-    });
-
-    const bootMat = new THREE.MeshStandardMaterial({
-      color: 0x2e241c, // Dark leather hiking boots
-      roughness: 0.72,
-      metalness: 0.15
-    });
+    const packGroup = new THREE.Group();
+    packGroup.name = 'SurvivalBackpack';
 
     const packMat = new THREE.MeshStandardMaterial({
-      color: 0x825e3c, // Canvas survivor backpack
-      roughness: 0.80,
+      color: 0x3d4a36, // Olive military / canvas survival pack
+      roughness: 0.85,
       metalness: 0.05
     });
 
-    const hairMat = new THREE.MeshStandardMaterial({
-      color: 0x24170d, // Dark brown natural human hair
-      roughness: 0.90,
-      metalness: 0.0
+    const leatherMat = new THREE.MeshStandardMaterial({
+      color: 0x5a3825, // Brown leather straps
+      roughness: 0.7,
+      metalness: 0.1
     });
 
-    const eyeMat = new THREE.MeshStandardMaterial({
-      color: 0x1a2634, // Dark eyes
-      roughness: 0.15,
-      metalness: 0.0
+    const matMat = new THREE.MeshStandardMaterial({
+      color: 0x2b4c6f, // Blue roll mat
+      roughness: 0.9
     });
 
-    // Torso (Shirt) attached to Spine/Chest
-    const torsoGeo = new THREE.BoxGeometry(0.52, 0.45, 0.28);
-    const torsoMesh = new THREE.Mesh(torsoGeo, shirtMat);
-    torsoMesh.position.set(0, 0.12, 0);
-    torsoMesh.castShadow = true;
-    torsoMesh.receiveShadow = true;
-    spine.add(torsoMesh);
+    // Main pack pouch
+    const mainPouch = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.38, 0.18), packMat);
+    mainPouch.position.set(0, 0.05, -0.16);
+    mainPouch.castShadow = true;
+    packGroup.add(mainPouch);
 
-    // Survival Backpack attached to Chest (Back is -Z, Front is +Z)
-    const packGeo = new THREE.BoxGeometry(0.44, 0.50, 0.24);
-    const packMesh = new THREE.Mesh(packGeo, packMat);
-    packMesh.position.set(0, 0.05, -0.24);
-    packMesh.castShadow = true;
-    chest.add(packMesh);
+    // Front pocket
+    const frontPocket = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.20, 0.08), packMat);
+    frontPocket.position.set(0, -0.04, -0.27);
+    frontPocket.castShadow = true;
+    packGroup.add(frontPocket);
 
-    // Bedroll attached on top of backpack
-    const bedrollGeo = new THREE.CylinderGeometry(0.09, 0.09, 0.48, 8);
-    const bedroll = new THREE.Mesh(bedrollGeo, shirtMat);
+    // Top bedroll / sleeping mat
+    const bedroll = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.34, 12), matMat);
     bedroll.rotation.z = Math.PI / 2;
-    bedroll.position.set(0, 0.35, -0.24);
+    bedroll.position.set(0, 0.26, -0.16);
     bedroll.castShadow = true;
-    chest.add(bedroll);
+    packGroup.add(bedroll);
 
-    // Neck & Head with realistic human facial features (Front is +Z)
-    const neckGeo = new THREE.CylinderGeometry(0.10, 0.11, 0.16, 8);
-    const neckMesh = new THREE.Mesh(neckGeo, skinMat);
-    neckMesh.position.set(0, 0.06, 0);
-    neckMesh.castShadow = true;
-    neck.add(neckMesh);
+    // Bedroll leather straps
+    const strapGeo = new THREE.CylinderGeometry(0.065, 0.065, 0.03, 12);
+    const strapL = new THREE.Mesh(strapGeo, leatherMat);
+    strapL.rotation.z = Math.PI / 2;
+    strapL.position.set(0.1, 0.26, -0.16);
+    const strapR = new THREE.Mesh(strapGeo, leatherMat);
+    strapR.rotation.z = Math.PI / 2;
+    strapR.position.set(-0.1, 0.26, -0.16);
+    packGroup.add(strapL);
+    packGroup.add(strapR);
 
-    const headGroup = new THREE.Group();
-    headGroup.position.set(0, 0.10, 0);
+    // Side canteen / flask
+    const canteen = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.14, 8), leatherMat);
+    canteen.position.set(0.16, 0.02, -0.16);
+    packGroup.add(canteen);
 
-    // Human Head
-    const headGeo = new THREE.SphereGeometry(0.18, 12, 10);
-    headGeo.scale(0.92, 1.15, 1.02);
-    const headMesh = new THREE.Mesh(headGeo, skinMat);
-    headMesh.castShadow = true;
-    headGroup.add(headMesh);
-
-    // Human Hair
-    const hairGeo = new THREE.SphereGeometry(0.19, 10, 8);
-    hairGeo.scale(0.96, 1.12, 1.05);
-    const hairMesh = new THREE.Mesh(hairGeo, hairMat);
-    hairMesh.position.set(0, 0.05, -0.02);
-    hairMesh.castShadow = true;
-    headGroup.add(hairMesh);
-
-    // Nose
-    const noseGeo = new THREE.ConeGeometry(0.035, 0.07, 5);
-    const noseMesh = new THREE.Mesh(noseGeo, skinMat);
-    noseMesh.rotation.x = Math.PI / 2;
-    noseMesh.position.set(0, 0, 0.19);
-    headGroup.add(noseMesh);
-
-    // Eyes
-    for (const side of [-1, 1]) {
-      const eyeGeo = new THREE.SphereGeometry(0.022, 6, 6);
-      const eyeMesh = new THREE.Mesh(eyeGeo, eyeMat);
-      eyeMesh.position.set(side * 0.065, 0.035, 0.165);
-      headGroup.add(eyeMesh);
-    }
-
-    head.add(headGroup);
-
-    // Left Arm (Upper Arm, Forearm, Hand with skin)
-    const upperArmGeo = new THREE.CylinderGeometry(0.075, 0.065, 0.28, 8);
-    const lUpperArmMesh = new THREE.Mesh(upperArmGeo, shirtMat);
-    lUpperArmMesh.position.set(0, -0.14, 0);
-    lUpperArmMesh.castShadow = true;
-    lUpperArm.add(lUpperArmMesh);
-
-    const foreArmGeo = new THREE.CylinderGeometry(0.065, 0.055, 0.26, 8);
-    const lForeArmMesh = new THREE.Mesh(foreArmGeo, skinMat);
-    lForeArmMesh.position.set(0, -0.13, 0);
-    lForeArmMesh.castShadow = true;
-    lForeArm.add(lForeArmMesh);
-
-    const handGeo = new THREE.BoxGeometry(0.07, 0.10, 0.04);
-    const lHandMesh = new THREE.Mesh(handGeo, skinMat);
-    lHandMesh.position.set(0, -0.05, 0);
-    lHandMesh.castShadow = true;
-    lHand.add(lHandMesh);
-
-    // Right Arm (Upper Arm, Forearm, Hand with skin)
-    const rUpperArmMesh = new THREE.Mesh(upperArmGeo, shirtMat);
-    rUpperArmMesh.position.set(0, -0.14, 0);
-    rUpperArmMesh.castShadow = true;
-    rUpperArm.add(rUpperArmMesh);
-
-    const rForeArmMesh = new THREE.Mesh(foreArmGeo, skinMat);
-    rForeArmMesh.position.set(0, -0.13, 0);
-    rForeArmMesh.castShadow = true;
-    rForeArm.add(rForeArmMesh);
-
-    const rHandMesh = new THREE.Mesh(handGeo, skinMat);
-    rHandMesh.position.set(0, -0.05, 0);
-    rHandMesh.castShadow = true;
-    rHand.add(rHandMesh);
-
-    // Hips / Cargo Shorts Pelvis
-    const pelvisGeo = new THREE.BoxGeometry(0.46, 0.26, 0.28);
-    const pelvisMesh = new THREE.Mesh(pelvisGeo, shortsMat);
-    pelvisMesh.position.set(0, -0.08, 0);
-    pelvisMesh.castShadow = true;
-    hips.add(pelvisMesh);
-
-    // Left Leg (Thigh Shorts, Lower Leg Skin, Hiking Boot)
-    const thighGeo = new THREE.CylinderGeometry(0.10, 0.085, 0.42, 8);
-    const lThighMesh = new THREE.Mesh(thighGeo, shortsMat);
-    lThighMesh.position.set(0, -0.21, 0);
-    lThighMesh.castShadow = true;
-    lThigh.add(lThighMesh);
-
-    const shinGeo = new THREE.CylinderGeometry(0.08, 0.065, 0.40, 8);
-    const lShinMesh = new THREE.Mesh(shinGeo, skinMat);
-    lShinMesh.position.set(0, -0.20, 0);
-    lShinMesh.castShadow = true;
-    lShin.add(lShinMesh);
-
-    const bootGeo = new THREE.BoxGeometry(0.13, 0.16, 0.26);
-    const lBootMesh = new THREE.Mesh(bootGeo, bootMat);
-    lBootMesh.position.set(0, -0.06, 0.05); // Boot toes point forward (+Z)
-    lBootMesh.castShadow = true;
-    lFoot.add(lBootMesh);
-
-    // Right Leg (Thigh Shorts, Lower Leg Skin, Hiking Boot)
-    const rThighMesh = new THREE.Mesh(thighGeo, shortsMat);
-    rThighMesh.position.set(0, -0.21, 0);
-    rThighMesh.castShadow = true;
-    rThigh.add(rThighMesh);
-
-    const rShinMesh = new THREE.Mesh(shinGeo, skinMat);
-    rShinMesh.position.set(0, -0.20, 0);
-    rShinMesh.castShadow = true;
-    rShin.add(rShinMesh);
-
-    const rBootMesh = new THREE.Mesh(bootGeo, bootMat);
-    rBootMesh.position.set(0, -0.06, 0.05); // Boot toes point forward (+Z)
-    rBootMesh.castShadow = true;
-    rFoot.add(rBootMesh);
-
-    this.characterVisual.add(survivorGroup);
-    this.mixer = new THREE.AnimationMixer(survivorGroup);
+    spineBone.add(packGroup);
   }
 
-  private createHumanSkeletalAnimations(): void {
+  private createSkeletalAnimations(): void {
     if (!this.mixer) return;
 
-    // Helper to generate quaternion track for a bone
-    const qTrack = (boneName: string, times: number[], quats: number[]) => {
-      return new THREE.QuaternionKeyframeTrack(`${boneName}.quaternion`, times, quats);
+    // Helper functions for tracks
+    const deg2rad = Math.PI / 180;
+    const qTrack = (boneName: string, times: number[], qArray: number[]): THREE.QuaternionKeyframeTrack => {
+      return new THREE.QuaternionKeyframeTrack(`${boneName}.quaternion`, times, qArray);
+    };
+    const pTrack = (boneName: string, times: number[], pArray: number[]): THREE.VectorKeyframeTrack => {
+      return new THREE.VectorKeyframeTrack(`${boneName}.position`, times, pArray);
     };
 
-    const pTrack = (boneName: string, times: number[], pos: number[]) => {
-      return new THREE.VectorKeyframeTrack(`${boneName}.position`, times, pos);
-    };
-
-    const eulerToQuat = (xDeg: number, yDeg: number, zDeg: number): THREE.Quaternion => {
-      const e = new THREE.Euler(
-        THREE.MathUtils.degToRad(xDeg),
-        THREE.MathUtils.degToRad(yDeg),
-        THREE.MathUtils.degToRad(zDeg),
-        'XYZ'
-      );
-      return new THREE.Quaternion().setFromEuler(e);
+    const makeQ = (xDeg: number, yDeg: number, zDeg: number): [number, number, number, number] => {
+      const euler = new THREE.Euler(xDeg * deg2rad, yDeg * deg2rad, zDeg * deg2rad, 'YXZ');
+      const q = new THREE.Quaternion().setFromEuler(euler);
+      return [q.x, q.y, q.z, q.w];
     };
 
     const qArr = (...rotations: [number, number, number][]): number[] => {
-      const res: number[] = [];
+      const arr: number[] = [];
       rotations.forEach(([x, y, z]) => {
-        const q = eulerToQuat(x, y, z);
-        res.push(q.x, q.y, q.z, q.w);
+        arr.push(...makeQ(x, y, z));
       });
-      return res;
+      return arr;
     };
 
-    // 1. IDLE CLIP (Natural human breathing and subtle arm relaxation)
-    const idleDuration = 2.4;
-    const idleTimes = [0, 1.2, 2.4];
+    // 1. IDLE CLIP (Natural breathing, posture shift)
+    const idleDuration = 3.0;
+    const idleTimes = [0, 1.5, 3.0];
     const idleTracks: THREE.KeyframeTrack[] = [
       pTrack('Hips', idleTimes, [0, 0.95, 0, 0, 0.94, 0, 0, 0.95, 0]),
       qTrack('Spine', idleTimes, qArr([0, 0, 0], [2, 0, 0], [0, 0, 0])),
-      qTrack('Chest', idleTimes, qArr([0, 0, 0], [-2, 0, 0], [0, 0, 0])),
-      qTrack('LeftArm', idleTimes, qArr([0, 0, -8], [0, 0, -6], [0, 0, -8])),
-      qTrack('RightArm', idleTimes, qArr([0, 0, 8], [0, 0, 6], [0, 0, 8])),
-      qTrack('LeftForeArm', idleTimes, qArr([15, 0, 0], [12, 0, 0], [15, 0, 0])),
-      qTrack('RightForeArm', idleTimes, qArr([15, 0, 0], [12, 0, 0], [15, 0, 0])),
-      qTrack('Head', idleTimes, qArr([0, 0, 0], [1, 2, 0], [0, 0, 0]))
+      qTrack('Spine1', idleTimes, qArr([0, 0, 0], [2, 0, 0], [0, 0, 0])),
+      qTrack('Spine2', idleTimes, qArr([0, 0, 0], [3, 0, 0], [0, 0, 0])),
+      qTrack('Head', idleTimes, qArr([0, 0, 0], [-2, 0, 0], [0, 0, 0])),
+      qTrack('LeftArm', idleTimes, qArr([0, 0, -8], [0, 0, -10], [0, 0, -8])),
+      qTrack('LeftForeArm', idleTimes, qArr([15, 0, 0], [18, 0, 0], [15, 0, 0])),
+      qTrack('RightArm', idleTimes, qArr([0, 0, 8], [0, 0, 10], [0, 0, 8])),
+      qTrack('RightForeArm', idleTimes, qArr([15, 0, 0], [18, 0, 0], [15, 0, 0])),
+      qTrack('LeftUpLeg', idleTimes, qArr([0, 0, 0], [0, 0, 0], [0, 0, 0])),
+      qTrack('RightUpLeg', idleTimes, qArr([0, 0, 0], [0, 0, 0], [0, 0, 0]))
     ];
     const idleClip = new THREE.AnimationClip('idle', idleDuration, idleTracks);
 
@@ -362,7 +198,7 @@ export class HumanSurvivorModel {
         0, 0.95, 0
       ]),
       qTrack('Spine', walkTimes, qArr([0, -3, 0], [0, 0, 0], [0, 3, 0], [0, 0, 0], [0, -3, 0])),
-      // Left leg swing forward (+X rot in hips)
+      // Left leg swing forward
       qTrack('LeftUpLeg', walkTimes, qArr([-25, 0, 0], [0, 0, 0], [25, 0, 0], [0, 0, 0], [-25, 0, 0])),
       qTrack('LeftLeg', walkTimes, qArr([5, 0, 0], [30, 0, 0], [5, 0, 0], [0, 0, 0], [5, 0, 0])),
       // Right leg swing opposite

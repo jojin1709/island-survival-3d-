@@ -194,6 +194,7 @@ canvas#game {
 .meter-fill.hunger { background: var(--color-hunger); }
 .meter-fill.thirst { background: var(--color-thirst); }
 .meter-fill.stamina { background: var(--color-stamina); }
+.meter-fill.oxygen { background: linear-gradient(90deg, #00b4d8, #90e0ef); }
 
 /* --- Bottom Center Hotbar --- */
 .hotbar-container {
