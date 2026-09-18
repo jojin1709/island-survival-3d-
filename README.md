@@ -1,5 +1,5 @@
 > [!NOTE]
-> **Island Survival 2.0 is live:** Rebuilt with rigged humanoid locomotion, real swimming & buoyancy physics, dynamic PBR multi-splat terrain & water shaders, astronomical day/night & weather cycles, modular crafting/building, and procedural Web Audio.
+> **Island Survival 3D is live:** Experience rigged humanoid locomotion, real swimming & buoyancy physics, dynamic PBR multi-splat terrain & water shaders, astronomical day/night & weather cycles, modular crafting/building, and procedural Web Audio.
 
 <div align="center">
 
@@ -10,7 +10,7 @@
 [![Rapier3D](https://img.shields.io/badge/Rapier3D-Physics-orange?style=for-the-badge&logo=webassembly)](https://rapier.rs/)
 [![Vite](https://img.shields.io/badge/Vite-7.3-646CFF?style=for-the-badge&logo=vite)](https://vitejs.dev/)
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-Vercel-000000?style=for-the-badge&logo=vercel)](https://island-survival-3d.vercel.app/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
+[![License: Proprietary](https://img.shields.io/badge/License-All%20Rights%20Reserved-red?style=for-the-badge)](LICENSE)
 
 ### A realistic, third-person 3D tropical survival game built natively for the web.
 
@@ -18,25 +18,14 @@ Explore a procedurally generated tropical island, gather resources, craft surviv
 
 🎮 **[Play Live Demo on Vercel → https://island-survival-3d.vercel.app/](https://island-survival-3d.vercel.app/)**
 
-**Developed with ❤️ by [JOJIN JOHN](https://github.com/jojin1709)**
-
-<p><strong>Quick Launch</strong></p>
-
-```bash
-git clone https://github.com/jojin1709/island-survival-3d-.git
-cd island-survival-3d-
-npm install
-npm run dev
-```
-
-<sub>Open <code>http://localhost:5173/</code> in any modern WebGL2-compatible browser.</sub>
+**Developed by [JOJIN JOHN](https://github.com/jojin1709)**
 
 ---
 
 </div>
 
 > [!TIP]
-> **No backend or account required:** All player stats, world modifications, crafted tools, and shelter coordinates are automatically saved locally in your browser via `localStorage`.
+> **Persistent Local Gameplay:** All player stats, world modifications, crafted tools, and shelter coordinates are automatically saved locally in your browser via `localStorage`.
 
 ---
 
@@ -45,10 +34,7 @@ npm run dev
 - [Overview](#overview)
   - [Why Island Survival?](#why-island-survival)
   - [Key Highlights](#key-highlights)
-- [Quick Start](#quick-start)
-  - [Prerequisites](#prerequisites)
-  - [Installation & Local Run](#installation--local-run)
-  - [Production Build](#production-build)
+- [Live Game](#live-game)
 - [Game Controls](#game-controls)
 - [Key Features](#key-features)
   - [1. Humanoid Locomotion & Skeletal Animations](#1-humanoid-locomotion--skeletal-animations)
@@ -62,24 +48,23 @@ npm run dev
 - [Biomes & Landmarks](#biomes--landmarks)
 - [Development & Debugging](#development--debugging)
 - [Tech Stack](#tech-stack)
-- [Author & Credits](#author--credits)
-- [License](#license)
+- [Author & Copyright](#author--copyright)
 
 ---
 
 ## Overview
 
-**Island Survival** is a self-contained, high-performance third-person 3D survival game engineered from the ground up with Three.js, TypeScript, Vite, and Rapier3D physics. It demonstrates what is achievable with modern WebGL without relying on heavy third-party gaming engines.
+**Island Survival** is a high-performance third-person 3D survival game engineered from the ground up with Three.js, TypeScript, Vite, and Rapier3D physics. It showcases native browser 3D graphics, physics simulations, and procedural shaders without third-party gaming engine bloat.
 
 <details>
 <summary><strong>Why Island Survival?</strong></summary>
 
-Most web-based 3D demos are simple static showcases or primitive geometry tests. **Island Survival** bridges the gap between browser demos and full indie survival games by implementing:
+Most web-based 3D demos are simple static showcases or primitive geometry tests. **Island Survival** delivers a full indie survival game experience:
 - Real humanoid skeletal animation state machines (Idle, Walk, Run, Sprint, Jump, Fall, Land, Swim, Dive).
 - True camera-relative vector locomotion and Rapier3D physics.
 - Realistic buoyant water volumes and wave displacement.
 - Rich procedural PBR multi-splat shading that dynamically blends sand, lush jungle grass, and mountain granite based on altitude and slope.
-- Zero server overhead — runs 100% client-side with 60 FPS target performance on standard hardware.
+- Zero server overhead — runs 100% client-side with 60 FPS target performance.
 
 </details>
 
@@ -96,38 +81,11 @@ Most web-based 3D demos are simple static showcases or primitive geometry tests.
 
 ---
 
-## Quick Start
+## Live Game
 
-### Prerequisites
-- **Node.js**: `v18.0.0` or higher
-- **npm**: `v9.0.0` or higher
-- **Modern Web Browser**: Chrome, Edge, Firefox, or Safari with WebGL2 support
+Play the live production version in any WebGL2-compatible browser:
 
-### Installation & Local Run
-
-```bash
-# 1. Clone the repository
-git clone https://github.com/your-username/island-survival.git
-cd island-survival
-
-# 2. Install dependencies
-npm install
-
-# 3. Start the Vite dev server
-npm run dev
-```
-
-Visit `http://localhost:5173/` in your browser and click **ENTER ISLAND**.
-
-### Production Build
-
-```bash
-# Type check and compile optimized static bundle
-npm run build
-
-# Preview production build locally
-npm run preview
-```
+👉 **[https://island-survival-3d.vercel.app/](https://island-survival-3d.vercel.app/)**
 
 ---
 
@@ -206,63 +164,6 @@ flowchart TD
     MAIN --> UI["UIManager (HUD, Inventory, Crafting, Toasts)"]
 ```
 
-```
-src/
-├── assets/
-│   └── AssetManager.ts          # Centralized GLTF & procedural PBR texture loader
-├── game/
-│   ├── audio/
-│   │   └── SynthesizedAudio.ts  # Web Audio API spatial ocean, wind & SFX synthesis
-│   ├── building/
-│   │   ├── BuildingManager.ts   # Persistent structures & colliders
-│   │   └── BuildingPlacer.ts    # Ghost blueprint preview & terrain validation
-│   ├── camera/
-│   │   └── ThirdPersonCamera.ts # Smooth orbit, shoulder offset & collision raycasting
-│   ├── crafting/
-│   │   ├── CraftingManager.ts   # Crafting validation & output
-│   │   └── RecipeRegistry.ts    # Recipe definitions
-│   ├── environment/
-│   │   ├── PropManager.ts       # Shipwreck, sea cave, driftwood, springs
-│   │   ├── RockManager.ts       # Granite boulders & mineable nodes
-│   │   ├── SkyAtmosphere.ts     # Solar arc, lighting, shadows, stars & clouds
-│   │   ├── VegetationManager.ts # Palms, hardwoods, bushes & instanced grass
-│   │   ├── WaterMesh.ts         # Trochoidal wave ocean & lagoon shaders
-│   │   └── WaterVolume.ts       # Water submersion & swimming state detection
-│   ├── interaction/
-│   │   └── InteractionManager.ts# Proximity & raycast gathering detection
-│   ├── inventory/
-│   │   ├── InventoryManager.ts  # 24-slot inventory, hotbar & stacking
-│   │   └── ItemRegistry.ts      # Item definitions, weights, consumables
-│   ├── physics/
-│   │   └── PhysicsWorld.ts      # Rapier3D physics world & colliders
-│   ├── player/
-│   │   ├── AnimationController.ts # 11-state skeletal animation state machine
-│   │   ├── CharacterController.ts # Ground & swimming movement physics
-│   │   └── HumanSurvivorModel.ts  # Rigged human survivor mesh & bones
-│   ├── save/
-│   │   └── SaveManager.ts       # LocalStorage game state persistence
-│   ├── survival/
-│   │   └── SurvivalStats.ts     # Health, hunger, thirst, stamina simulation
-│   ├── terrain/
-│   │   ├── TerrainGenerator.ts  # 220m procedural heightmap & trimesh collider
-│   │   └── TerrainMaterial.ts   # Multi-splat PBR slope & altitude shader
-│   ├── time/
-│   │   └── DayNightCycle.ts     # Astronomical solar time progression
-│   ├── ui/
-│   │   ├── BuildingUI.ts        # Placement hotkey guide
-│   │   ├── CraftingUI.ts        # Crafting recipe workshop modal
-│   │   ├── HUD.ts               # Minimalist status meters, compass tape & hotbar
-│   │   ├── InventoryUI.ts       # 24-slot grid modal & tooltips
-│   │   ├── ToastUI.ts           # Non-intrusive notifications
-│   │   └── UIManager.ts         # UI coordinator
-│   ├── weather/
-│   │   └── WeatherManager.ts    # Clear, cloudy, rainstorm particle engine
-│   └── world/
-│       └── IslandZones.ts       # Zone definitions & landmark coordinates
-├── main.ts                      # Main game bootstrap & render loop
-└── style.css                    # Modern minimalist survival HUD styling
-```
-
 ---
 
 ## Biomes & Landmarks
@@ -300,14 +201,9 @@ Press <kbd>F3</kbd> in-game to toggle the **Controller Debug Overlay**:
 
 ---
 
-## Author & Credits
+## Author & Copyright
 
 **Developed by JOJIN JOHN**
-* **GitHub**: [@your-username](https://github.com/)
 * **Project**: Island Survival 3D
-
----
-
-## License
-
-This project is licensed under the [MIT License](LICENSE) — free for personal, educational, and commercial use.
+* **Copyright**: © 2026 JOJIN JOHN. All rights reserved.
+* **License**: Proprietary — unauthorized copying, reuse, or distribution of this code or assets is strictly prohibited.
