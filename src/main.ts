@@ -101,6 +101,12 @@ app.innerHTML = `
     <!-- Bottom Center Hotbar -->
     <div class="hotbar-container" id="hotbar"></div>
 
+    <!-- Developer Watermark Badge -->
+    <div class="dev-badge">
+      <span style="font-weight: 700; color: #fff;">🏝️ Island Survival 3D</span>
+      <span>Developed by <a href="https://github.com/jojin1709" target="_blank" rel="noopener">JOJIN JOHN</a></span>
+    </div>
+
     <!-- F3 Debug Overlay -->
     <div id="debugOverlay" class="hidden">
       <div class="debug-card">
@@ -164,6 +170,10 @@ app.innerHTML = `
         <div><kbd>F3</kbd> Debug Vectors</div>
       </div>
       <button class="enter-btn" id="enterIslandBtn">ENTER ISLAND</button>
+      <div class="developer-credit">
+        <span>Crafted with Three.js & Rapier3D by <a href="https://github.com/jojin1709" target="_blank" rel="noopener"><strong>JOJIN JOHN</strong></a></span>
+        <span class="copyright">© 2026 JOJIN JOHN • All Rights Reserved</span>
+      </div>
     </div>
   </div>
 `;
