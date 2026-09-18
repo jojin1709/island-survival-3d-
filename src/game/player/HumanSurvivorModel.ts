@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
-export const CHARACTER_MODEL_FORWARD_OFFSET = Math.PI;
+export const CHARACTER_MODEL_FORWARD_OFFSET = 0;
 
 export class HumanSurvivorModel {
   public playerRoot = new THREE.Group();
@@ -12,9 +12,8 @@ export class HumanSurvivorModel {
   public animations = new Map<string, THREE.AnimationAction>();
   public isLoaded = false;
 
-  // Skeletal references & bind pose quaternions
+  // Skeletal references
   public bones: Record<string, THREE.Bone> = {};
-  public targetBindQuats: Record<string, THREE.Quaternion> = {};
   public gltfScene?: THREE.Group;
 
   constructor() {
@@ -32,7 +31,7 @@ export class HumanSurvivorModel {
   }
 
   public async load(): Promise<void> {
-    console.log('[HumanSurvivorModel] Loading human survivor GLB & relative retargeting suite...');
+    console.log('[HumanSurvivorModel] Loading human survivor GLB & generating native animation clips...');
     const loader = new GLTFLoader();
 
     try {
@@ -40,7 +39,7 @@ export class HumanSurvivorModel {
       const survivorGltf = await loader.loadAsync('/assets/characters/human_survivor.glb');
       this.gltfScene = survivorGltf.scene;
 
-      // Enable shadows and capture native bind pose quaternions
+      // Enable shadows and gather all bones
       this.gltfScene.traverse((obj) => {
         if ((obj as THREE.Mesh).isMesh) {
           obj.castShadow = true;
@@ -56,11 +55,10 @@ export class HumanSurvivorModel {
         if ((obj as THREE.Bone).isBone) {
           const bone = obj as THREE.Bone;
           this.bones[bone.name] = bone;
-          this.targetBindQuats[bone.name] = bone.quaternion.clone();
         }
       });
 
-      // Scale model to human height (~1.75m)
+      // Scale model to natural human height (~1.75m)
       this.gltfScene.scale.set(1.0, 1.0, 1.0);
       this.gltfScene.position.set(0, 0, 0);
       this.characterVisual.add(this.gltfScene);
@@ -71,97 +69,170 @@ export class HumanSurvivorModel {
       // 2. Initialize AnimationMixer on GLB scene
       this.mixer = new THREE.AnimationMixer(this.gltfScene);
 
-      // 3. Load Mocap Animation Clips and capture source bind pose quaternions
-      const animGltf = await loader.loadAsync('/assets/characters/Soldier.glb');
-      const animClips = animGltf.animations;
-
-      const sourceBindQuats: Record<string, THREE.Quaternion> = {};
-      animGltf.scene.traverse((obj) => {
-        if ((obj as THREE.Bone).isBone) {
-          const b = obj as THREE.Bone;
-          const cleanName = b.name.replace(/^mixamorig:/i, '').replace(/^mixamorig/i, '');
-          sourceBindQuats[cleanName] = b.quaternion.clone();
-        }
-      });
-
-      // Relative Quaternion Retargeting
-      const retargetClip = (sourceClip: THREE.AnimationClip, newName: string): THREE.AnimationClip => {
-        const tracks: THREE.KeyframeTrack[] = [];
-        for (const track of sourceClip.tracks) {
-          const cleanedName = track.name
-            .replace(/^mixamorig:/i, '')
-            .replace(/^mixamorig/i, '')
-            .replace(/\.rotation$/i, '.quaternion');
-
-          const parts = cleanedName.split('.');
-          const boneName = parts[0];
-          const property = parts[1];
-
-          // Ignore scale and translation tracks
-          if (property === 'scale' || property === 'position') continue;
-
-          // Retarget quaternion rotations relative to each bone's bind pose
-          if (property === 'quaternion' && this.bones[boneName]) {
-            const sourceRest = sourceBindQuats[boneName] || new THREE.Quaternion(0, 0, 0, 1);
-            const targetRest = this.targetBindQuats[boneName] || new THREE.Quaternion(0, 0, 0, 1);
-            const invSourceRest = sourceRest.clone().invert();
-
-            const rotValues = [...track.values];
-            const keyQ = new THREE.Quaternion();
-
-            for (let i = 0; i < rotValues.length; i += 4) {
-              keyQ.set(rotValues[i], rotValues[i + 1], rotValues[i + 2], rotValues[i + 3]);
-              
-              // Delta rotation in source local bone space
-              const deltaQ = keyQ.clone().multiply(invSourceRest);
-
-              // Apply delta rotation to target bone bind pose
-              const targetQ = deltaQ.multiply(targetRest).normalize();
-
-              rotValues[i] = targetQ.x;
-              rotValues[i + 1] = targetQ.y;
-              rotValues[i + 2] = targetQ.z;
-              rotValues[i + 3] = targetQ.w;
-            }
-
-            const rotTrack = new THREE.QuaternionKeyframeTrack(`${boneName}.quaternion`, track.times, rotValues);
-            tracks.push(rotTrack);
-          }
-        }
-        return new THREE.AnimationClip(newName, sourceClip.duration, tracks);
-      };
-
-      const idleSource = animClips.find((c) => c.name.toLowerCase().includes('idle')) || animClips[0];
-      const walkSource = animClips.find((c) => c.name.toLowerCase().includes('walk')) || animClips[3];
-      const runSource = animClips.find((c) => c.name.toLowerCase().includes('run')) || animClips[1];
-
-      const idleClip = retargetClip(idleSource, 'idle');
-      const walkClip = retargetClip(walkSource, 'walk');
-      const runClip = retargetClip(runSource, 'run');
-
-      const actionIdle = this.mixer.clipAction(idleClip);
-      const actionWalk = this.mixer.clipAction(walkClip);
-      const actionRun = this.mixer.clipAction(runClip);
-
-      this.animations.set('idle', actionIdle);
-      this.animations.set('walk', actionWalk);
-      this.animations.set('run', actionRun);
-      this.animations.set('sprint', actionRun);
-      this.animations.set('land', actionIdle);
-
-      // Swimming & airborne animations
-      this.animations.set('swim', actionWalk);
-      this.animations.set('swim_idle', actionIdle);
-      this.animations.set('water_enter', actionWalk);
-      this.animations.set('water_exit', actionWalk);
-      this.animations.set('jump', actionRun);
-      this.animations.set('fall', actionRun);
+      // 3. Build Pure Biomechanical Skeletal Animation Clips
+      this.createNativeSkeletalAnimations();
 
       this.isLoaded = true;
-      console.log('[HumanSurvivorModel] Relative quaternion retargeting completed with clean pelvis & legs!');
+      console.log('[HumanSurvivorModel] Human survivor loaded with 100% stable upright kinematics!');
     } catch (err) {
       console.error('[HumanSurvivorModel] Failed to load human model:', err);
     }
+  }
+
+  private createNativeSkeletalAnimations(): void {
+    if (!this.mixer) return;
+
+    const deg2rad = Math.PI / 180;
+    const legRest = new THREE.Quaternion(0, 0, 1, 0); // Native 180 deg Z leg bind pose
+
+    // Helper to create quaternion from Euler
+    const makeQ = (xDeg: number, yDeg: number, zDeg: number): THREE.Quaternion => {
+      const euler = new THREE.Euler(xDeg * deg2rad, yDeg * deg2rad, zDeg * deg2rad, 'YXZ');
+      return new THREE.Quaternion().setFromEuler(euler);
+    };
+
+    // Helper for upper body tracks (relative to identity)
+    const upperQArr = (...rotations: [number, number, number][]): number[] => {
+      const arr: number[] = [];
+      rotations.forEach(([x, y, z]) => {
+        const q = makeQ(x, y, z);
+        arr.push(q.x, q.y, q.z, q.w);
+      });
+      return arr;
+    };
+
+    // Helper for leg tracks (multiplies relative to native [0,0,1,0] leg rest)
+    const legQArr = (...rotations: [number, number, number][]): number[] => {
+      const arr: number[] = [];
+      rotations.forEach(([xDeg, yDeg, zDeg]) => {
+        // Because of the 180 deg Z roll, local X rotation is inverted
+        const swingQ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -xDeg * deg2rad);
+        const yawQ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yDeg * deg2rad);
+        const rollQ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), zDeg * deg2rad);
+        
+        const finalQ = swingQ.clone().multiply(yawQ).multiply(rollQ).multiply(legRest).normalize();
+        arr.push(finalQ.x, finalQ.y, finalQ.z, finalQ.w);
+      });
+      return arr;
+    };
+
+    const qTrack = (boneName: string, times: number[], qArray: number[]): THREE.QuaternionKeyframeTrack => {
+      return new THREE.QuaternionKeyframeTrack(`${boneName}.quaternion`, times, qArray);
+    };
+
+    // ==========================================
+    // 1. IDLE CLIP (Natural upright breathing)
+    // ==========================================
+    const idleDuration = 2.4;
+    const idleTimes = [0, 1.2, 2.4];
+    const idleTracks: THREE.KeyframeTrack[] = [
+      qTrack('Hips', idleTimes, upperQArr([0, 0, 0], [0, 0, 0], [0, 0, 0])),
+      qTrack('Spine', idleTimes, upperQArr([0, 0, 0], [2, 0, 0], [0, 0, 0])),
+      qTrack('Spine1', idleTimes, upperQArr([0, 0, 0], [1.5, 0, 0], [0, 0, 0])),
+      qTrack('Spine2', idleTimes, upperQArr([0, 0, 0], [2, 0, 0], [0, 0, 0])),
+      qTrack('Head', idleTimes, upperQArr([0, 0, 0], [-1.5, 0, 0], [0, 0, 0])),
+      qTrack('LeftArm', idleTimes, upperQArr([0, 0, -8], [0, 0, -9], [0, 0, -8])),
+      qTrack('LeftForeArm', idleTimes, upperQArr([12, 0, 0], [15, 0, 0], [12, 0, 0])),
+      qTrack('RightArm', idleTimes, upperQArr([0, 0, 8], [0, 0, 9], [0, 0, 8])),
+      qTrack('RightForeArm', idleTimes, upperQArr([12, 0, 0], [15, 0, 0], [12, 0, 0])),
+      qTrack('LeftUpLeg', idleTimes, legQArr([0, 0, 0], [0, 0, 0], [0, 0, 0])),
+      qTrack('RightUpLeg', idleTimes, legQArr([0, 0, 0], [0, 0, 0], [0, 0, 0])),
+      qTrack('LeftLeg', idleTimes, upperQArr([0, 0, 0], [0, 0, 0], [0, 0, 0])),
+      qTrack('RightLeg', idleTimes, upperQArr([0, 0, 0], [0, 0, 0], [0, 0, 0]))
+    ];
+    const idleClip = new THREE.AnimationClip('idle', idleDuration, idleTracks);
+
+    // ==========================================
+    // 2. WALK CLIP (Forward bipedal locomotion)
+    // ==========================================
+    const walkDuration = 1.0;
+    const walkTimes = [0, 0.25, 0.5, 0.75, 1.0];
+    const walkTracks: THREE.KeyframeTrack[] = [
+      qTrack('Spine', walkTimes, upperQArr([4, -3, 0], [4, 0, 0], [4, 3, 0], [4, 0, 0], [4, -3, 0])),
+      // Left leg swings forward (+24 deg), back (-24 deg)
+      qTrack('LeftUpLeg', walkTimes, legQArr([24, 0, 0], [0, 0, 0], [-24, 0, 0], [0, 0, 0], [24, 0, 0])),
+      qTrack('LeftLeg', walkTimes, upperQArr([5, 0, 0], [25, 0, 0], [5, 0, 0], [0, 0, 0], [5, 0, 0])),
+      // Right leg swings opposite
+      qTrack('RightUpLeg', walkTimes, legQArr([-24, 0, 0], [0, 0, 0], [24, 0, 0], [0, 0, 0], [-24, 0, 0])),
+      qTrack('RightLeg', walkTimes, upperQArr([5, 0, 0], [0, 0, 0], [5, 0, 0], [25, 0, 0], [5, 0, 0])),
+      // Arms swing opposite to legs
+      qTrack('LeftArm', walkTimes, upperQArr([-20, 0, -8], [0, 0, -8], [20, 0, -8], [0, 0, -8], [-20, 0, -8])),
+      qTrack('LeftForeArm', walkTimes, upperQArr([20, 0, 0], [10, 0, 0], [30, 0, 0], [15, 0, 0], [20, 0, 0])),
+      qTrack('RightArm', walkTimes, upperQArr([20, 0, 8], [0, 0, 8], [-20, 0, 8], [0, 0, 8], [20, 0, 8])),
+      qTrack('RightForeArm', walkTimes, upperQArr([30, 0, 0], [15, 0, 0], [20, 0, 0], [10, 0, 0], [30, 0, 0]))
+    ];
+    const walkClip = new THREE.AnimationClip('walk', walkDuration, walkTracks);
+
+    // ==========================================
+    // 3. RUN CLIP (Dynamic forward run stride)
+    // ==========================================
+    const runDuration = 0.65;
+    const runTimes = [0, 0.1625, 0.325, 0.4875, 0.65];
+    const runTracks: THREE.KeyframeTrack[] = [
+      qTrack('Spine', runTimes, upperQArr([12, -4, 0], [12, 0, 0], [12, 4, 0], [12, 0, 0], [12, -4, 0])),
+      qTrack('LeftUpLeg', runTimes, legQArr([42, 0, 0], [0, 0, 0], [-42, 0, 0], [0, 0, 0], [42, 0, 0])),
+      qTrack('LeftLeg', runTimes, upperQArr([10, 0, 0], [55, 0, 0], [10, 0, 0], [5, 0, 0], [10, 0, 0])),
+      qTrack('RightUpLeg', runTimes, legQArr([-42, 0, 0], [0, 0, 0], [42, 0, 0], [0, 0, 0], [-42, 0, 0])),
+      qTrack('RightLeg', runTimes, upperQArr([10, 0, 0], [5, 0, 0], [10, 0, 0], [55, 0, 0], [10, 0, 0])),
+      qTrack('LeftArm', runTimes, upperQArr([-45, 0, -8], [0, 0, -8], [45, 0, -8], [0, 0, -8], [-45, 0, -8])),
+      qTrack('LeftForeArm', runTimes, upperQArr([50, 0, 0], [25, 0, 0], [65, 0, 0], [30, 0, 0], [50, 0, 0])),
+      qTrack('RightArm', runTimes, upperQArr([45, 0, 8], [0, 0, 8], [-45, 0, 8], [0, 0, 8], [45, 0, 8])),
+      qTrack('RightForeArm', runTimes, upperQArr([65, 0, 0], [30, 0, 0], [50, 0, 0], [25, 0, 0], [65, 0, 0]))
+    ];
+    const runClip = new THREE.AnimationClip('run', runDuration, runTracks);
+
+    // ==========================================
+    // 4. JUMP & FALL CLIPS
+    // ==========================================
+    const jumpClip = new THREE.AnimationClip('jump', 0.8, [
+      qTrack('Spine', [0, 0.4, 0.8], upperQArr([-8, 0, 0], [-12, 0, 0], [-5, 0, 0])),
+      qTrack('LeftUpLeg', [0, 0.4, 0.8], legQArr([30, 0, 0], [40, 0, 0], [20, 0, 0])),
+      qTrack('RightUpLeg', [0, 0.4, 0.8], legQArr([30, 0, 0], [40, 0, 0], [20, 0, 0])),
+      qTrack('LeftArm', [0, 0.4, 0.8], upperQArr([60, 0, -20], [90, 0, -25], [50, 0, -15])),
+      qTrack('RightArm', [0, 0.4, 0.8], upperQArr([60, 0, 20], [90, 0, 25], [50, 0, 15]))
+    ]);
+
+    const fallClip = new THREE.AnimationClip('fall', 0.5, [
+      qTrack('Spine', [0, 0.5], upperQArr([-5, 0, 0], [-5, 0, 0])),
+      qTrack('LeftUpLeg', [0, 0.5], legQArr([15, 0, 0], [15, 0, 0])),
+      qTrack('RightUpLeg', [0, 0.5], legQArr([15, 0, 0], [15, 0, 0])),
+      qTrack('LeftArm', [0, 0.5], upperQArr([50, 0, -25], [50, 0, -25])),
+      qTrack('RightArm', [0, 0.5], upperQArr([50, 0, 25], [50, 0, 25]))
+    ]);
+
+    // ==========================================
+    // 5. SWIMMING CLIPS
+    // ==========================================
+    const swimTimes = [0, 0.3, 0.6, 0.9, 1.2];
+    const swimClip = new THREE.AnimationClip('swim', 1.2, [
+      qTrack('Spine', swimTimes, upperQArr([-10, 0, 0], [-10, 0, 0], [-10, 0, 0], [-10, 0, 0], [-10, 0, 0])),
+      qTrack('Head', swimTimes, upperQArr([-35, 0, 0], [-35, 8, 0], [-35, 0, 0], [-35, -8, 0], [-35, 0, 0])),
+      qTrack('LeftArm', swimTimes, upperQArr([120, -30, -20], [60, -45, -30], [-20, 0, -15], [80, 0, -35], [120, -30, -20])),
+      qTrack('RightArm', swimTimes, upperQArr([-20, 0, 15], [80, 0, 35], [120, 30, 20], [60, 45, 30], [-20, 0, 15])),
+      qTrack('LeftUpLeg', swimTimes, legQArr([18, 0, 0], [-15, 0, 0], [18, 0, 0], [-15, 0, 0], [18, 0, 0])),
+      qTrack('RightUpLeg', swimTimes, legQArr([-15, 0, 0], [18, 0, 0], [-15, 0, 0], [18, 0, 0], [-15, 0, 0]))
+    ]);
+
+    const swimIdleClip = new THREE.AnimationClip('swim_idle', 1.6, [
+      qTrack('Spine', [0, 0.8, 1.6], upperQArr([-8, 0, 0], [-10, 0, 0], [-8, 0, 0])),
+      qTrack('LeftArm', [0, 0.8, 1.6], upperQArr([25, 0, -45], [45, 0, -25], [25, 0, -45])),
+      qTrack('RightArm', [0, 0.8, 1.6], upperQArr([25, 0, 45], [45, 0, 25], [25, 0, 45])),
+      qTrack('LeftUpLeg', [0, 0.8, 1.6], legQArr([12, 0, 0], [-12, 0, 0], [12, 0, 0])),
+      qTrack('RightUpLeg', [0, 0.8, 1.6], legQArr([-12, 0, 0], [12, 0, 0], [-12, 0, 0]))
+    ]);
+
+    // Register all animation actions in mixer
+    const clips = [idleClip, walkClip, runClip, jumpClip, fallClip, swimClip, swimIdleClip];
+    clips.forEach((clip) => {
+      const action = this.mixer!.clipAction(clip);
+      this.animations.set(clip.name, action);
+    });
+
+    // Aliases
+    this.animations.set('sprint', this.animations.get('run')!);
+    this.animations.set('land', this.animations.get('idle')!);
+    this.animations.set('water_enter', this.animations.get('swim')!);
+    this.animations.set('water_exit', this.animations.get('walk')!);
   }
 
   private attachSurvivalBackpack(): void {
