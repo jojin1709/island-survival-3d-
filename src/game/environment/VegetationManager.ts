@@ -293,14 +293,33 @@ export class VegetationManager {
   }
 
   private spawnInstancedGrass(scene: THREE.Scene): void {
-    const grassCount = 2500;
-    const grassGeo = new THREE.PlaneGeometry(0.7, 0.9, 1, 2);
-    grassGeo.translate(0, 0.45, 0);
+    const grassCount = 1800;
+    
+    // Cross-quad grass cluster geometry (two intersecting planes)
+    const grassGeo = new THREE.BufferGeometry();
+    const w = 0.45;
+    const h = 0.38;
+    
+    // Plane 1 (facing Z) & Plane 2 (rotated 60 deg) & Plane 3 (rotated 120 deg)
+    const vertices = new Float32Array([
+      // Quad 1
+      -w / 2, 0, 0,   w / 2, 0, 0,   w / 2, h, 0,
+      -w / 2, 0, 0,   w / 2, h, 0,  -w / 2, h, 0,
+      // Quad 2 (rotated 60 deg)
+      -w * 0.25, 0, -w * 0.43,   w * 0.25, 0, w * 0.43,   w * 0.25, h, w * 0.43,
+      -w * 0.25, 0, -w * 0.43,   w * 0.25, h, w * 0.43,  -w * 0.25, h, -w * 0.43,
+      // Quad 3 (rotated 120 deg)
+      -w * 0.25, 0, w * 0.43,    w * 0.25, 0, -w * 0.43,  w * 0.25, h, -w * 0.43,
+      -w * 0.25, 0, w * 0.43,    w * 0.25, h, -w * 0.43, -w * 0.25, h, w * 0.43
+    ]);
+
+    grassGeo.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+    grassGeo.computeVertexNormals();
 
     const grassMat = new THREE.MeshStandardMaterial({
-      color: 0x4aa330,
-      roughness: 0.75,
-      metalness: 0.02,
+      color: 0x3d8b28,
+      roughness: 0.85,
+      metalness: 0.0,
       side: THREE.DoubleSide
     });
 
@@ -313,16 +332,15 @@ export class VegetationManager {
 
     for (let i = 0; i < grassCount; i++) {
       const angle = Math.random() * Math.PI * 2;
-      const dist = 6 + Math.random() * 64;
+      const dist = 5 + Math.random() * 68;
       const x = Math.cos(angle) * dist;
       const z = Math.sin(angle) * dist;
       const y = TerrainGenerator.sampleHeight(x, z);
 
-      if (y >= 1.5 && y <= 13.0) {
+      if (y >= 1.2 && y <= 12.5) {
         dummy.position.set(x, y, z);
         dummy.rotation.y = Math.random() * Math.PI * 2;
-        dummy.rotation.z = (Math.random() - 0.5) * 0.2;
-        const scale = 0.75 + Math.random() * 0.5;
+        const scale = 0.8 + Math.random() * 0.4;
         dummy.scale.set(scale, scale, scale);
         dummy.updateMatrix();
         this.grassInstancedMesh.setMatrixAt(placed++, dummy.matrix);

@@ -73,7 +73,7 @@ export class HumanSurvivorModel {
       const animGltf = await loader.loadAsync('/assets/characters/Soldier.glb');
       const animClips = animGltf.animations;
 
-      // Retarget mocap tracks to human survivor rig
+      // Retarget mocap tracks: ONLY quaternion rotations and relative Hips Y-position
       const retargetClip = (sourceClip: THREE.AnimationClip, newName: string): THREE.AnimationClip => {
         const tracks: THREE.KeyframeTrack[] = [];
         for (const track of sourceClip.tracks) {
@@ -82,11 +82,35 @@ export class HumanSurvivorModel {
             .replace(/^mixamorig/i, '')
             .replace(/\.rotation$/i, '.quaternion');
 
-          const boneName = cleanedName.split('.')[0];
-          if (this.bones[boneName]) {
-            const newTrack = track.clone();
-            newTrack.name = cleanedName;
-            tracks.push(newTrack);
+          const parts = cleanedName.split('.');
+          const boneName = parts[0];
+          const property = parts[1];
+
+          // Strict filter: Ignore all scale tracks to prevent mesh distortion
+          if (property === 'scale') continue;
+
+          // Ignore translation tracks for all bones except Hips
+          if (property === 'position') {
+            if (boneName.toLowerCase() !== 'hips') continue;
+            // For Hips position, only keep relative vertical bobbing
+            const baseHipsY = this.bones['Hips'] ? this.bones['Hips'].position.y : 0.95;
+            const initialY = track.values[1];
+            const posValues = [...track.values];
+            for (let i = 0; i < posValues.length; i += 3) {
+              posValues[i] = 0; // lock X
+              posValues[i + 1] = baseHipsY + (posValues[i + 1] - initialY); // relative Y bobbing
+              posValues[i + 2] = 0; // lock Z (no root drift)
+            }
+            const posTrack = new THREE.VectorKeyframeTrack('Hips.position', track.times, posValues);
+            tracks.push(posTrack);
+            continue;
+          }
+
+          // For quaternion rotation tracks, map to existing survivor bones
+          if (property === 'quaternion' && this.bones[boneName]) {
+            const rotTrack = track.clone();
+            rotTrack.name = `${boneName}.quaternion`;
+            tracks.push(rotTrack);
           }
         }
         return new THREE.AnimationClip(newName, sourceClip.duration, tracks);
@@ -110,7 +134,7 @@ export class HumanSurvivorModel {
       this.animations.set('sprint', actionRun);
       this.animations.set('land', actionIdle);
 
-      // Swimming & airborne animations (derive from walk/idle with pitch)
+      // Swimming & airborne animations
       this.animations.set('swim', actionWalk);
       this.animations.set('swim_idle', actionIdle);
       this.animations.set('water_enter', actionWalk);
@@ -119,7 +143,7 @@ export class HumanSurvivorModel {
       this.animations.set('fall', actionRun);
 
       this.isLoaded = true;
-      console.log('[HumanSurvivorModel] Rigged human survivor and mocap animations retargeted successfully!');
+      console.log('[HumanSurvivorModel] Rigged human survivor with mocap kinematics loaded cleanly!');
     } catch (err) {
       console.error('[HumanSurvivorModel] Failed to load human model:', err);
     }
