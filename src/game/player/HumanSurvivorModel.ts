@@ -131,10 +131,10 @@ export class HumanSurvivorModel {
       qTrack('Spine1', idleTimes, upperQArr([0, 0, 0], [1.5, 0, 0], [0, 0, 0])),
       qTrack('Spine2', idleTimes, upperQArr([0, 0, 0], [2, 0, 0], [0, 0, 0])),
       qTrack('Head', idleTimes, upperQArr([0, 0, 0], [-1.5, 0, 0], [0, 0, 0])),
-      qTrack('LeftArm', idleTimes, upperQArr([0, 0, -8], [0, 0, -9], [0, 0, -8])),
-      qTrack('LeftForeArm', idleTimes, upperQArr([12, 0, 0], [15, 0, 0], [12, 0, 0])),
-      qTrack('RightArm', idleTimes, upperQArr([0, 0, 8], [0, 0, 9], [0, 0, 8])),
-      qTrack('RightForeArm', idleTimes, upperQArr([12, 0, 0], [15, 0, 0], [12, 0, 0])),
+      qTrack('LeftArm', idleTimes, upperQArr([75, 5, -5], [76, 5, -5], [75, 5, -5])),
+      qTrack('LeftForeArm', idleTimes, upperQArr([0, 0, -10], [0, 0, -12], [0, 0, -10])),
+      qTrack('RightArm', idleTimes, upperQArr([75, -5, 5], [76, -5, 5], [75, -5, 5])),
+      qTrack('RightForeArm', idleTimes, upperQArr([0, 0, 10], [0, 0, 12], [0, 0, 10])),
       qTrack('LeftUpLeg', idleTimes, legQArr([0, 0, 0], [0, 0, 0], [0, 0, 0])),
       qTrack('RightUpLeg', idleTimes, legQArr([0, 0, 0], [0, 0, 0], [0, 0, 0])),
       qTrack('LeftLeg', idleTimes, upperQArr([0, 0, 0], [0, 0, 0], [0, 0, 0])),
@@ -155,11 +155,11 @@ export class HumanSurvivorModel {
       // Right leg swings opposite
       qTrack('RightUpLeg', walkTimes, legQArr([-24, 0, 0], [0, 0, 0], [24, 0, 0], [0, 0, 0], [-24, 0, 0])),
       qTrack('RightLeg', walkTimes, upperQArr([5, 0, 0], [0, 0, 0], [5, 0, 0], [25, 0, 0], [5, 0, 0])),
-      // Arms swing opposite to legs
-      qTrack('LeftArm', walkTimes, upperQArr([-20, 0, -8], [0, 0, -8], [20, 0, -8], [0, 0, -8], [-20, 0, -8])),
-      qTrack('LeftForeArm', walkTimes, upperQArr([20, 0, 0], [10, 0, 0], [30, 0, 0], [15, 0, 0], [20, 0, 0])),
-      qTrack('RightArm', walkTimes, upperQArr([20, 0, 8], [0, 0, 8], [-20, 0, 8], [0, 0, 8], [20, 0, 8])),
-      qTrack('RightForeArm', walkTimes, upperQArr([30, 0, 0], [15, 0, 0], [20, 0, 0], [10, 0, 0], [30, 0, 0]))
+      // Arms swing naturally opposite to legs
+      qTrack('LeftArm', walkTimes, upperQArr([75, 5, 18], [75, 5, -5], [75, 5, -24], [75, 5, -5], [75, 5, 18])),
+      qTrack('LeftForeArm', walkTimes, upperQArr([0, 0, -8], [0, 0, -15], [0, 0, -25], [0, 0, -15], [0, 0, -8])),
+      qTrack('RightArm', walkTimes, upperQArr([75, -5, -18], [75, -5, 5], [75, -5, 24], [75, -5, 5], [75, -5, -18])),
+      qTrack('RightForeArm', walkTimes, upperQArr([0, 0, 8], [0, 0, 15], [0, 0, 25], [0, 0, 15], [0, 0, 8]))
     ];
     const walkClip = new THREE.AnimationClip('walk', walkDuration, walkTracks);
 
@@ -174,10 +174,10 @@ export class HumanSurvivorModel {
       qTrack('LeftLeg', runTimes, upperQArr([10, 0, 0], [55, 0, 0], [10, 0, 0], [5, 0, 0], [10, 0, 0])),
       qTrack('RightUpLeg', runTimes, legQArr([-42, 0, 0], [0, 0, 0], [42, 0, 0], [0, 0, 0], [-42, 0, 0])),
       qTrack('RightLeg', runTimes, upperQArr([10, 0, 0], [5, 0, 0], [10, 0, 0], [55, 0, 0], [10, 0, 0])),
-      qTrack('LeftArm', runTimes, upperQArr([-45, 0, -8], [0, 0, -8], [45, 0, -8], [0, 0, -8], [-45, 0, -8])),
-      qTrack('LeftForeArm', runTimes, upperQArr([50, 0, 0], [25, 0, 0], [65, 0, 0], [30, 0, 0], [50, 0, 0])),
-      qTrack('RightArm', runTimes, upperQArr([45, 0, 8], [0, 0, 8], [-45, 0, 8], [0, 0, 8], [45, 0, 8])),
-      qTrack('RightForeArm', runTimes, upperQArr([65, 0, 0], [30, 0, 0], [50, 0, 0], [25, 0, 0], [65, 0, 0]))
+      qTrack('LeftArm', runTimes, upperQArr([75, 5, 32], [75, 5, -5], [75, 5, -42], [75, 5, -5], [75, 5, 32])),
+      qTrack('LeftForeArm', runTimes, upperQArr([0, 0, -25], [0, 0, -45], [0, 0, -65], [0, 0, -45], [0, 0, -25])),
+      qTrack('RightArm', runTimes, upperQArr([75, -5, -32], [75, -5, 5], [75, -5, 42], [75, -5, 5], [75, -5, -32])),
+      qTrack('RightForeArm', runTimes, upperQArr([0, 0, 25], [0, 0, 45], [0, 0, 65], [0, 0, 45], [0, 0, 25]))
     ];
     const runClip = new THREE.AnimationClip('run', runDuration, runTracks);
 
@@ -188,16 +188,16 @@ export class HumanSurvivorModel {
       qTrack('Spine', [0, 0.4, 0.8], upperQArr([-8, 0, 0], [-12, 0, 0], [-5, 0, 0])),
       qTrack('LeftUpLeg', [0, 0.4, 0.8], legQArr([30, 0, 0], [40, 0, 0], [20, 0, 0])),
       qTrack('RightUpLeg', [0, 0.4, 0.8], legQArr([30, 0, 0], [40, 0, 0], [20, 0, 0])),
-      qTrack('LeftArm', [0, 0.4, 0.8], upperQArr([60, 0, -20], [90, 0, -25], [50, 0, -15])),
-      qTrack('RightArm', [0, 0.4, 0.8], upperQArr([60, 0, 20], [90, 0, 25], [50, 0, 15]))
+      qTrack('LeftArm', [0, 0.4, 0.8], upperQArr([60, 5, -35], [50, 5, -50], [60, 5, -35])),
+      qTrack('RightArm', [0, 0.4, 0.8], upperQArr([60, -5, 35], [50, -5, 50], [60, -5, 35]))
     ]);
 
     const fallClip = new THREE.AnimationClip('fall', 0.5, [
       qTrack('Spine', [0, 0.5], upperQArr([-5, 0, 0], [-5, 0, 0])),
       qTrack('LeftUpLeg', [0, 0.5], legQArr([15, 0, 0], [15, 0, 0])),
       qTrack('RightUpLeg', [0, 0.5], legQArr([15, 0, 0], [15, 0, 0])),
-      qTrack('LeftArm', [0, 0.5], upperQArr([50, 0, -25], [50, 0, -25])),
-      qTrack('RightArm', [0, 0.5], upperQArr([50, 0, 25], [50, 0, 25]))
+      qTrack('LeftArm', [0, 0.5], upperQArr([65, 5, -25], [65, 5, -25])),
+      qTrack('RightArm', [0, 0.5], upperQArr([65, -5, 25], [65, -5, 25]))
     ]);
 
     // ==========================================
